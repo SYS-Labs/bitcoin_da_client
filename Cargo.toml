@@ -1,0 +1,24 @@
+[package]
+name = "bitcoin_da_client"
+version = "0.1.1"
+edition = "2021"
+authors = ["SYS LABS abdul@syscoin.org"]
+description = "Tools for interacting with BitcoinDA by SYS LABS"
+license = "MIT OR Apache-2.0"
+[lib]
+name = "bitcoin_da_client"
+path = "src/lib.rs"
+
+[dependencies]
+async-trait = "0.1"
+mockito = "1.6.1"
+bitcoincore-rpc = "0.19.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12.12", features = ["json"] }
+hex = "0.4"
+tokio = { version = "1", features = ["full"] }
+jsonrpc = "0.18.0"
+[dev-dependencies]
+mockito = "1.6.1"
+tokio = { version = "1.42.0", features = ["macros", "rt-multi-thread"] }
