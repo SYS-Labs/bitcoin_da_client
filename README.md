@@ -163,8 +163,6 @@ If you encounter any issues or have questions, feel free to open an issue on the
 
 ---
 
-*This README was generated to help you integrate and utilize the `syscoin_client` library effectively in your projects. For more detailed documentation, please refer to the source code and comments within the library.*
-
 ---
 
 © 2024 Syscoin Client Maintainers
