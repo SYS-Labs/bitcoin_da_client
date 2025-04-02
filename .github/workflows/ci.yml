@@ -34,5 +34,16 @@ jobs:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Build and Run Tests
-        run: cargo test --verbose
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin --locked
+
+      - name: Run Tests with Coverage
+        run: cargo tarpaulin --exclude-files tests/* --out Xml --output-dir coverage
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: coverage
+
+
