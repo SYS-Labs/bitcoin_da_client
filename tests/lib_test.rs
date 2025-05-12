@@ -4,6 +4,7 @@ mod tests {
     use serde_json::json;
     use tokio;
     use bitcoin_da_client::{SyscoinClient};
+    use hex;
 
 
     #[tokio::test]
@@ -226,7 +227,59 @@ mod tests {
         assert!(result.is_err());
     }
 
-
+    #[tokio::test]
+    async fn test_get_blob() {
+        use hex::encode;
+        
+        let mut mock_server = std::thread::spawn(|| {
+            Server::new()
+        }).join().expect("Failed to create mock server");
+        
+        let expected_data = b"hello world blob data".to_vec();
+        let hex_data = encode(&expected_data);
+        let blob_id = "deadbeef123";
+        
+        // Mock the RPC endpoint
+        let mock_response = json!({
+            "result": {
+                "data": hex_data
+            },
+            "error": null,
+            "id": 1
+        });
+        
+        // Mock the JSON-RPC POST request 
+        mock_server
+            .mock("POST", "/")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(mock_response.to_string())
+            .create();
+            
+        // ALSO mock the fallback cloud GET endpoint
+        // The url format should match what's in get_blob_from_cloud
+        mock_server
+            .mock("GET", format!("/{}", blob_id).as_str())
+            .with_status(200)
+            .with_body(&expected_data)
+            .create();
+        
+        let client = SyscoinClient::new(
+            &mock_server.url(),
+            "user",
+            "password",
+            &mock_server.url(), // Same server for both
+            None
+        ).unwrap();
+        
+        // Add very detailed debug info
+        println!("Server URL: {}", &mock_server.url());
+        println!("Blob ID: {}", blob_id);
+        
+        let result = client.get_blob(blob_id).await;
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        assert_eq!(result.unwrap(), expected_data);
+    }
 
 }
 
