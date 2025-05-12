@@ -3,7 +3,7 @@ mod tests {
     use mockito::Server;
     use serde_json::json;
     use tokio;
-    use bitcoin_da_client::{SyscoinClient};
+    use bitcoin_da_client::{SyscoinClient, MAX_BLOB_SIZE};
     use hex;
 
 
@@ -279,6 +279,24 @@ mod tests {
         let result = client.get_blob(blob_id).await;
         assert!(result.is_ok(), "Error: {:?}", result.err());
         assert_eq!(result.unwrap(), expected_data);
+    }
+
+    #[tokio::test]
+    async fn test_max_blob_size() {
+        // Create a client
+        let client = SyscoinClient::new(
+            "http://dummy-url.com",
+            "user",
+            "password",
+            "http://dummy-poda.com",
+            None
+        ).unwrap();
+        
+        // Verify it returns the correct size constant
+        assert_eq!(client.max_blob_size(), MAX_BLOB_SIZE);
+        
+        // Verify it's reasonable (2 MiB)
+        assert_eq!(client.max_blob_size(), 2 * 1024 * 1024);
     }
 
 }

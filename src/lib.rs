@@ -250,6 +250,11 @@ impl SyscoinClient {
     pub async fn create_or_load_wallet(&self, wallet_name: &str) -> Result<(), Box<dyn Error>> {
         self.rpc_client.create_or_load_wallet(wallet_name).await
     }
+
+    /// Return the maximum supported blob size
+    pub fn max_blob_size(&self) -> usize {
+        MAX_BLOB_SIZE
+    }
 }
 
 /// Mock implementation for testing
