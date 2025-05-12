@@ -4,9 +4,13 @@ use async_trait::async_trait;
 use reqwest::{Client, ClientBuilder};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use tracing::warn;
 
 // Default timeout in seconds if none is specified
 const DEFAULT_TIMEOUT_SECS: u64 = 30;
+
+/// Maximum payload accepted by the Syscoin PoDA endpoint (2 MiB).
+pub const MAX_BLOB_SIZE: usize = 2 * 1024 * 1024;
 
 /// Response structure for JSON-RPC calls
 #[derive(Deserialize, Debug)]
@@ -68,8 +72,8 @@ impl RealRpcClient {
     /// Send a JSON-RPC request to the Syscoin node
     async fn rpc_request(&self, method: &str, params: &[Value]) -> Result<Value, Box<dyn Error>> {
         let request_body = json!({
-            "jsonrpc": "1.0",
-            "id": "syscoin-client-rust",
+            "jsonrpc": "2.0",
+            "id": 1,
             "method": method,
             "params": params,
         });
@@ -167,8 +171,18 @@ impl SyscoinClient {
 
     /// Create a blob in BitcoinDA(FKA Poda) storage
     pub async fn create_blob(&self, data: &[u8]) -> Result<String, Box<dyn Error>> {
-        let data_str = hex::encode(data);
-        let params = vec![json!(data_str)];
+        if data.len() > MAX_BLOB_SIZE {
+            return Err(format!(
+                "blob size ({}) exceeds maximum allowed ({})",
+                data.len(),
+                MAX_BLOB_SIZE
+            ).into());
+        }
+
+        // Use named parameter format as required by Syscoin
+        let data_hex = hex::encode(data);
+        let params = vec![json!({ "data": data_hex })];
+        
         let response = self.rpc_client.call("syscoincreatenevmblob", &params).await?;
         let hash = response
             .get("versionhash")
@@ -183,7 +197,50 @@ impl SyscoinClient {
         self.rpc_client.get_balance(None, None).await
     }
 
-    /// Retrieve blob data from PODA storage
+    /// Fetch a blob; tries RPC first, then falls back to PoDA cloud
+    pub async fn get_blob(&self, blob_id: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+        match self.get_blob_from_rpc(blob_id).await {
+            Ok(data) => Ok(data),
+            Err(e) => {
+                warn!("get_blob_from_rpc failed ({e}); falling back to cloud");
+                self.get_blob_from_cloud(blob_id).await
+            }
+        }
+    }
+
+    /// Retrieve blob data from RPC node
+    async fn get_blob_from_rpc(&self, blob_id: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+        // Strip any 0x prefix
+        let actual_blob_id = if let Some(stripped) = blob_id.strip_prefix("0x") {
+            stripped
+        } else {
+            blob_id
+        };
+
+        // Use named parameters as required
+        let params = vec![json!({
+            "versionhash_or_txid": actual_blob_id,
+            "getdata": true
+        })];
+
+        let response = self.rpc_client.call("getnevmblobdata", &params).await?;
+        
+        let hex_data = response
+            .get("data")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing data in getnevmblobdata response")?;
+
+        // Strip any 0x prefix from result data
+        let data_to_decode = if let Some(stripped) = hex_data.strip_prefix("0x") {
+            stripped
+        } else {
+            hex_data
+        };
+
+        Ok(hex::decode(data_to_decode)?)
+    }
+
+    /// Retrieve blob data from PODA cloud storage
     pub async fn get_blob_from_cloud(&self, version_hash: &str) -> Result<Vec<u8>, Box<dyn Error>> {
         let url = format!("{}/blob/{}", self.poda_url, version_hash);
         self.rpc_client.http_get(&url).await
@@ -208,7 +265,8 @@ impl RpcClient for MockRpcClient {
         // Return mock responses based on the method
         match method {
             "getbalance" => Ok(json!(10.5)),
-            "createblob" => Ok(json!("mock_blob_hash")),
+            "syscoincreatenevmblob" => Ok(json!({ "versionhash": "mock_blob_hash" })),
+            "getnevmblobdata" => Ok(json!({ "data": hex::encode(b"mock_data") })),
             "loadwallet" => Ok(json!(null)),
             "createwallet" => Ok(json!(null)),
             _ => Err("Unimplemented mock method".into()),
