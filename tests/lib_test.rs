@@ -290,5 +290,161 @@ mod tests {
         assert_eq!(result.unwrap(), expected_data);
     }
 
+    #[tokio::test]
+    async fn test_check_blob_finality_true() {
+        // Create mock server
+        let mut mock_server = std::thread::spawn(|| {
+            Server::new()
+        }).join().expect("Failed to create mock server");
+        
+        let blob_id = "deadbeef";
+        
+        // Mock a finalized blob response
+        let mock_response = json!({
+            "result": {
+                "chainlock": true
+            },
+            "error": null,
+            "id": 1
+        });
+        
+        mock_server
+            .mock("POST", "/")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(mock_response.to_string())
+            .create();
+            
+        let client = SyscoinClient::new(
+            &mock_server.url(),
+            "user",
+            "password",
+            "http://poda.example.com",
+            None
+        ).unwrap();
+        
+        let result = client.check_blob_finality(blob_id).await;
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        assert!(result.unwrap(), "Expected blob to be final");
+    }
+
+    #[tokio::test]
+    async fn test_check_blob_finality_false() {
+        // Create mock server
+        let mut mock_server = std::thread::spawn(|| {
+            Server::new()
+        }).join().expect("Failed to create mock server");
+        
+        let blob_id = "deadbeef";
+        
+        // Mock a non-finalized blob response
+        let mock_response = json!({
+            "result": {
+                "chainlock": false
+            },
+            "error": null,
+            "id": 1
+        });
+        
+        mock_server
+            .mock("POST", "/")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(mock_response.to_string())
+            .create();
+            
+        let client = SyscoinClient::new(
+            &mock_server.url(),
+            "user",
+            "password",
+            "http://poda.example.com",
+            None
+        ).unwrap();
+        
+        let result = client.check_blob_finality(blob_id).await;
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        assert!(!result.unwrap(), "Expected blob to not be final");
+    }
+
+    #[tokio::test]
+    async fn test_check_blob_finality_with_0x_prefix() {
+        // Create mock server
+        let mut mock_server = std::thread::spawn(|| {
+            Server::new()
+        }).join().expect("Failed to create mock server");
+        
+        let blob_id = "0xdeadbeef"; // Has 0x prefix
+        
+        // Mock a finalized blob response
+        let mock_response = json!({
+            "result": {
+                "chainlock": true
+            },
+            "error": null,
+            "id": 1
+        });
+        
+        // Verify the request was made with the correct parameters
+        mock_server
+            .mock("POST", "/")
+            .match_body(mockito::Matcher::JsonString(format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"getnevmblobdata","params":[{{"versionhash_or_txid":"deadbeef"}}]}}"#
+            )))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(mock_response.to_string())
+            .create();
+            
+        let client = SyscoinClient::new(
+            &mock_server.url(),
+            "user",
+            "password",
+            "http://poda.example.com",
+            None
+        ).unwrap();
+        
+        let result = client.check_blob_finality(blob_id).await;
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        assert!(result.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_check_blob_finality_error() {
+        // Create mock server
+        let mut mock_server = std::thread::spawn(|| {
+            Server::new()
+        }).join().expect("Failed to create mock server");
+        
+        let blob_id = "invalid";
+        
+        // Mock an error response
+        let mock_response = json!({
+            "result": null,
+            "error": {
+                "code": -5,
+                "message": "Blob not found"
+            },
+            "id": 1
+        });
+        
+        mock_server
+            .mock("POST", "/")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(mock_response.to_string())
+            .create();
+            
+        let client = SyscoinClient::new(
+            &mock_server.url(),
+            "user",
+            "password",
+            "http://poda.example.com",
+            None
+        ).unwrap();
+        
+        let result = client.check_blob_finality(blob_id).await;
+        assert!(result.is_err());
+    }
+
 }
 

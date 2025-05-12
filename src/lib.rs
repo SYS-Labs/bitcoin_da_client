@@ -249,6 +249,31 @@ impl SyscoinClient {
         self.rpc_client.http_get(&url).await
     }
 
+    /// Check if a blob is final
+    pub async fn check_blob_finality(&self, blob_id: &str) -> Result<bool, SyscoinError> {
+        // Strip any 0x prefix
+        let actual_blob_id = if let Some(stripped) = blob_id.strip_prefix("0x") {
+            stripped
+        } else {
+            blob_id
+        };
+    
+        // Use named parameters but don't request actual data
+        let params = vec![json!({
+            "versionhash_or_txid": actual_blob_id,
+        })];
+    
+        let response = self.rpc_client.call("getnevmblobdata", &params).await?;
+        
+        // Extract finality status from response
+        let is_final = response
+            .get("chainlock")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+    
+        Ok(is_final)
+    }
+
     /// Create or load a wallet by name
     pub async fn create_or_load_wallet(&self, wallet_name: &str) -> Result<(), SyscoinError> {
         self.rpc_client.create_or_load_wallet(wallet_name).await
