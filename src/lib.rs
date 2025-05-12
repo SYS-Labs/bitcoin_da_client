@@ -172,11 +172,6 @@ impl SyscoinClient {
         })
     }
 
-    /// Return the maximum supported blob size
-    pub fn max_blob_size(&self) -> usize {
-        MAX_BLOB_SIZE
-    }
-
     /// Create a blob in BitcoinDA(FKA Poda) storage
     pub async fn create_blob(&self, data: &[u8]) -> Result<String, SyscoinError> {
         if data.len() > MAX_BLOB_SIZE {
