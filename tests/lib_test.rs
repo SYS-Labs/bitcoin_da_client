@@ -103,28 +103,37 @@ mod tests {
         let mut mock_server = std::thread::spawn(|| {
             Server::new()
         }).join().expect("Failed to create mock server");
+        
         let expected_data = b"retrieved data".to_vec();
         let version_hash = "deadbeef";
 
         // Mock HTTP GET response
         let _m = mock_server
-            .mock("GET", format!("/blob/{}", version_hash).as_str()) // Convert to &str
+            .mock("GET", format!("/blob/{}", version_hash).as_str())
             .with_status(200)
             .with_body(&expected_data)
             .create();
 
         let client = SyscoinClient::new(
-            "http://localhost:8888",
-            "user",
-            "password",
-            &mock_server.url(),
-            None,
-        )
-            .unwrap();
+            "http://localhost:8888", // RPC URL (won't be used)
+            "user",                   // Username
+            "password",               // Password
+            &mock_server.url(),       // PODA cloud URL
+            None                      // Timeout
+        ).unwrap();
 
-        let result = client.get_blob_from_cloud(version_hash).await;
-
-        assert!(result.is_ok());
+        // Use get_blob with a non-existent RPC server to force fallback to cloud
+        // First make sure RPC will fail by mocking it to return an error
+        mock_server
+            .mock("POST", "/")
+            .with_status(500)
+            .with_body("RPC error")
+            .create();
+        
+        // Then call get_blob which should fall back to the cloud endpoint
+        let result = client.get_blob(version_hash).await;
+        
+        assert!(result.is_ok(), "Error: {:?}", result.err());
         assert_eq!(result.unwrap(), expected_data);
     }
 

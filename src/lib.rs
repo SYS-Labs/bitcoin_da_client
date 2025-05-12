@@ -12,6 +12,9 @@ const DEFAULT_TIMEOUT_SECS: u64 = 30;
 /// Maximum payload accepted by the Syscoin PoDA endpoint (2 MiB).
 pub const MAX_BLOB_SIZE: usize = 2 * 1024 * 1024;
 
+/// Thread-safe error type
+pub type SyscoinError = Box<dyn Error + Send + Sync + 'static>;
+
 /// Response structure for JSON-RPC calls
 #[derive(Deserialize, Debug)]
 struct JsonRpcResponse<T> {
@@ -23,13 +26,13 @@ struct JsonRpcResponse<T> {
 #[async_trait]
 pub trait RpcClient {
     /// Make a generic RPC call with any method and parameters
-    async fn call(&self, method: &str, params: &[Value]) -> Result<Value, Box<dyn Error>>;
+    async fn call(&self, method: &str, params: &[Value]) -> Result<Value, SyscoinError>;
 
     /// Get wallet balance with optional account and watchonly parameters
-    async fn get_balance(&self, account: Option<&str>, include_watchonly: Option<bool>) -> Result<f64, Box<dyn Error>>;
+    async fn get_balance(&self, account: Option<&str>, include_watchonly: Option<bool>) -> Result<f64, SyscoinError>;
 
     /// Make an HTTP GET request to the specified URL
-    async fn http_get(&self, url: &str) -> Result<Vec<u8>, Box<dyn Error>>;
+    async fn http_get(&self, url: &str) -> Result<Vec<u8>, SyscoinError>;
 }
 
 /// Production implementation of the RPC client for Syscoin
@@ -43,7 +46,7 @@ pub struct RealRpcClient {
 
 impl RealRpcClient {
     /// Create a new RPC client with default timeout
-    pub fn new(rpc_url: &str, rpc_user: &str, rpc_password: &str, timeout: Option<Duration>) -> Result<Self, Box<dyn Error>> {
+    pub fn new(rpc_url: &str, rpc_user: &str, rpc_password: &str, timeout: Option<Duration>) -> Result<Self, SyscoinError> {
         Self::new_with_timeout(rpc_url, rpc_user, rpc_password, timeout)
     }
 
@@ -53,7 +56,7 @@ impl RealRpcClient {
         rpc_user: &str,
         rpc_password: &str,
         timeout: Option<Duration>,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> Result<Self, SyscoinError> {
         let timeout = timeout.unwrap_or_else(|| Duration::from_secs(DEFAULT_TIMEOUT_SECS));
 
         let http_client = ClientBuilder::new()
@@ -70,7 +73,7 @@ impl RealRpcClient {
     }
 
     /// Send a JSON-RPC request to the Syscoin node
-    async fn rpc_request(&self, method: &str, params: &[Value]) -> Result<Value, Box<dyn Error>> {
+    async fn rpc_request(&self, method: &str, params: &[Value]) -> Result<Value, SyscoinError> {
         let request_body = json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -100,7 +103,7 @@ impl RealRpcClient {
     }
 
     /// Create or load a wallet by name
-    pub async fn create_or_load_wallet(&self, wallet_name: &str) -> Result<(), Box<dyn Error>> {
+    pub async fn create_or_load_wallet(&self, wallet_name: &str) -> Result<(), SyscoinError> {
         // First try to load the wallet
         match self.call("loadwallet", &[json!(wallet_name)]).await {
             Ok(_) => return Ok(()),
@@ -115,11 +118,11 @@ impl RealRpcClient {
 
 #[async_trait]
 impl RpcClient for RealRpcClient {
-    async fn call(&self, method: &str, params: &[Value]) -> Result<Value, Box<dyn Error>> {
+    async fn call(&self, method: &str, params: &[Value]) -> Result<Value, SyscoinError> {
         self.rpc_request(method, params).await
     }
 
-    async fn get_balance(&self, account: Option<&str>, include_watchonly: Option<bool>) -> Result<f64, Box<dyn Error>> {
+    async fn get_balance(&self, account: Option<&str>, include_watchonly: Option<bool>) -> Result<f64, SyscoinError> {
         let mut params = Vec::new();
 
         if let Some(acct) = account {
@@ -136,7 +139,7 @@ impl RpcClient for RealRpcClient {
         Ok(balance)
     }
 
-    async fn http_get(&self, url: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+    async fn http_get(&self, url: &str) -> Result<Vec<u8>, SyscoinError> {
         let response = self.http_client.get(url).send().await?;
 
         if !response.status().is_success() {
@@ -160,7 +163,7 @@ impl SyscoinClient {
         rpc_password: &str,
         poda_url: &str,
         timeout: Option<Duration>,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> Result<Self, SyscoinError> {
         let rpc_client = RealRpcClient::new_with_timeout(rpc_url, rpc_user, rpc_password, timeout)?;
 
         Ok(Self {
@@ -169,8 +172,13 @@ impl SyscoinClient {
         })
     }
 
+    /// Return the maximum supported blob size
+    pub fn max_blob_size(&self) -> usize {
+        MAX_BLOB_SIZE
+    }
+
     /// Create a blob in BitcoinDA(FKA Poda) storage
-    pub async fn create_blob(&self, data: &[u8]) -> Result<String, Box<dyn Error>> {
+    pub async fn create_blob(&self, data: &[u8]) -> Result<String, SyscoinError> {
         if data.len() > MAX_BLOB_SIZE {
             return Err(format!(
                 "blob size ({}) exceeds maximum allowed ({})",
@@ -193,12 +201,12 @@ impl SyscoinClient {
     }
 
     /// Get wallet balance
-    pub async fn get_balance(&self) -> Result<f64, Box<dyn Error>> {
+    pub async fn get_balance(&self) -> Result<f64, SyscoinError> {
         self.rpc_client.get_balance(None, None).await
     }
 
     /// Fetch a blob; tries RPC first, then falls back to PoDA cloud
-    pub async fn get_blob(&self, blob_id: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+    pub async fn get_blob(&self, blob_id: &str) -> Result<Vec<u8>, SyscoinError> {
         match self.get_blob_from_rpc(blob_id).await {
             Ok(data) => Ok(data),
             Err(e) => {
@@ -209,7 +217,7 @@ impl SyscoinClient {
     }
 
     /// Retrieve blob data from RPC node
-    async fn get_blob_from_rpc(&self, blob_id: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+    async fn get_blob_from_rpc(&self, blob_id: &str) -> Result<Vec<u8>, SyscoinError> {
         // Strip any 0x prefix
         let actual_blob_id = if let Some(stripped) = blob_id.strip_prefix("0x") {
             stripped
@@ -241,19 +249,14 @@ impl SyscoinClient {
     }
 
     /// Retrieve blob data from PODA cloud storage
-    pub async fn get_blob_from_cloud(&self, version_hash: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+    pub async fn get_blob_from_cloud(&self, version_hash: &str) -> Result<Vec<u8>, SyscoinError> {
         let url = format!("{}/blob/{}", self.poda_url, version_hash);
         self.rpc_client.http_get(&url).await
     }
 
     /// Create or load a wallet by name
-    pub async fn create_or_load_wallet(&self, wallet_name: &str) -> Result<(), Box<dyn Error>> {
+    pub async fn create_or_load_wallet(&self, wallet_name: &str) -> Result<(), SyscoinError> {
         self.rpc_client.create_or_load_wallet(wallet_name).await
-    }
-
-    /// Return the maximum supported blob size
-    pub fn max_blob_size(&self) -> usize {
-        MAX_BLOB_SIZE
     }
 }
 
@@ -266,7 +269,7 @@ pub struct MockRpcClient {
 #[cfg(test)]
 #[async_trait]
 impl RpcClient for MockRpcClient {
-    async fn call(&self, method: &str, _params: &[Value]) -> Result<Value, Box<dyn Error>> {
+    async fn call(&self, method: &str, _params: &[Value]) -> Result<Value, SyscoinError> {
         // Return mock responses based on the method
         match method {
             "getbalance" => Ok(json!(10.5)),
@@ -278,11 +281,11 @@ impl RpcClient for MockRpcClient {
         }
     }
 
-    async fn get_balance(&self, _account: Option<&str>, _include_watchonly: Option<bool>) -> Result<f64, Box<dyn Error>> {
+    async fn get_balance(&self, _account: Option<&str>, _include_watchonly: Option<bool>) -> Result<f64, SyscoinError> {
         Ok(10.5)
     }
 
-    async fn http_get(&self, _url: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+    async fn http_get(&self, _url: &str) -> Result<Vec<u8>, SyscoinError> {
         Ok(b"mock_data".to_vec())
     }
 }
