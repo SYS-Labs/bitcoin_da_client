@@ -96,7 +96,7 @@ use std::time::Duration;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Configuration
-    let rpc_url      = "http://localhost:8332";
+    let rpc_url      = "http://localhost:18370";
     let rpc_user     = "your_rpc_user";
     let rpc_password = "your_rpc_password";
     let poda_url     = "http://poda.example.com";
