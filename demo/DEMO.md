@@ -15,9 +15,7 @@ This document is organized so both technical and non-technical audiences can und
 6. [Demo Code](#demo-code)
 7. [Step-by-Step Explanation](#step-by-step-explanation)
 8. [Running the Demo](#running-the-demo)
-9. [Next Steps](#next-steps)
-10. [License](#license)
-11. [Contact](#contact)
+9. [Contact](#contact)
 
 ---
 
