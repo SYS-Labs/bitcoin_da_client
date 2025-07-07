@@ -181,7 +181,7 @@ impl RealRpcClient {
                 let s = e.to_string();
                 info!(s);
                 // -18 = wallet not found → create it
-                if s.contains("code: -18") {
+                if s.contains("failed") {
                     info!("wallet not found, creating new one");
                     self.call("createwallet", &[json!(wallet_name)]).await?;
                     return Ok(());
