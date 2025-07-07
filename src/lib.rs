@@ -345,17 +345,13 @@ impl SyscoinClient {
     /// Retrieve blob data from RPC node
     async fn get_blob_from_rpc(&self, blob_id: &str) -> Result<Vec<u8>, SyscoinError> {
         // Strip any 0x prefix
-        let actual_blob_id = if let Some(stripped) = blob_id.strip_prefix("0x") {
-            stripped
-        } else {
-            blob_id
-        };
+        let actual_blob_id = blob_id.strip_prefix("0x").unwrap_or(blob_id);
 
-        // Use named parameters as required
-        let params = vec![json!({
-            "versionhash_or_txid": actual_blob_id,
-            "getdata": true
-        })];
+        // Use positional parameters: (versionhash_or_txid: String, getdata: bool)
+        let params = vec![
+            json!(actual_blob_id),
+            json!(true),
+        ];
 
         let response = self.rpc_client.call("getnevmblobdata", &params).await?;
 
@@ -365,14 +361,10 @@ impl SyscoinClient {
             .ok_or("Missing data in getnevmblobdata response")?;
 
         // Strip any 0x prefix from result data
-        let data_to_decode = if let Some(stripped) = hex_data.strip_prefix("0x") {
-            stripped
-        } else {
-            hex_data
-        };
-
+        let data_to_decode = hex_data.strip_prefix("0x").unwrap_or(hex_data);
         Ok(hex::decode(data_to_decode)?)
     }
+
 
     /// Retrieve blob data from PODA cloud storage
     pub async fn get_blob_from_cloud(&self, version_hash: &str) -> Result<Vec<u8>, SyscoinError> {
