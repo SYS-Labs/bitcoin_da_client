@@ -343,6 +343,7 @@ impl SyscoinClient {
 
 
     /// Retrieve blob data from RPC node
+    /// Retrieve blob data from RPC node
     async fn get_blob_from_rpc(&self, blob_id: &str) -> Result<Vec<u8>, SyscoinError> {
         // Strip any 0x prefix
         let actual_blob_id = blob_id.strip_prefix("0x").unwrap_or(blob_id);
@@ -353,17 +354,29 @@ impl SyscoinClient {
             json!(true),
         ];
 
+        // 1) Call RPC
         let response = self.rpc_client.call("getnevmblobdata", &params).await?;
 
+
+        
         let hex_data = response
             .get("data")
             .and_then(|v| v.as_str())
             .ok_or("Missing data in getnevmblobdata response")?;
 
-        // Strip any 0x prefix from result data
+ 
+        if let Some(txid) = response.get("txid").and_then(|v| v.as_str()) {
+            let tx_link = format!("https://explorer-blockbook.syscoin.org/tx/{}", txid);
+            info!("🔗 View this transaction on Syscoin Explorer: {}", tx_link);
+        } else {
+            warn!("No txid field in getnevmblobdata response, cannot log explorer link");
+        }
+
+        // 5) Decode the hex (stripping an optional "0x")
         let data_to_decode = hex_data.strip_prefix("0x").unwrap_or(hex_data);
         Ok(hex::decode(data_to_decode)?)
     }
+
 
 
     /// Retrieve blob data from PODA cloud storage
