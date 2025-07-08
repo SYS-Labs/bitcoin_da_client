@@ -9,27 +9,28 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    // Initialize tracing: compact output without file/line info, max DEBUG level
+    // 🎛️ Initialize tracing: compact output, max DEBUG, no file/line info
     fmt()
-        .with_max_level(Level::DEBUG)
+        .with_max_level(Level::INFO)
         .with_file(false)
         .with_line_number(false)
         .with_target(false)
         .compact()
         .init();
 
-    info!("Starting Syscoin client application");
+    info!("🚀 Starting Syscoin client application");
 
-    // Configuration parameters
-    let rpc_url = "http://127.0.0.1:8370";
-    let rpc_user = "u";
+    // 🔧 Configuration parameters
+    let rpc_url    = "http://127.0.0.1:8370";
+    let rpc_user   = "u";
     let rpc_password = "p";
-    let poda_url = "https://poda.syscoin.org/vh/";
-    let timeout = Some(Duration::from_secs(30));
-    let wallet = "wallet200999";
-    debug!(rpc_url, rpc_user, poda_url, timeout = ?timeout, wallet, "Config loaded");
+    let poda_url   = "https://poda.syscoin.org/vh/";
+    let timeout    = Some(Duration::from_secs(30));
+    let wallet     = "wallet200999";
+    debug!(rpc_url, rpc_user, poda_url, timeout = ?timeout, wallet, "🔍 Config loaded");
 
-    // Initialize the Syscoin RPC client
+    // 🔌 Initialize the Syscoin RPC client
+    info!("🔌 Connecting to Syscoin node…");
     let client = SyscoinClient::new(
         rpc_url,
         rpc_user,
@@ -38,72 +39,78 @@ async fn main() -> Result<(), Error> {
         timeout,
         wallet,
     )?;
-    info!("SyscoinClient initialized successfully");
+    info!("✅ SyscoinClient initialized successfully");
 
-    // Create or load the wallet
-    info!(wallet, "Loading or creating wallet");
+    // 💼 Create or load the wallet
+    info!("🆕 Loading or creating wallet “{}”", wallet);
     client
         .create_or_load_wallet(wallet)
         .instrument(span!(Level::DEBUG, "create_or_load_wallet", wallet = wallet))
         .await?;
+    info!("✅ Wallet ready!");
 
-    // Fetch the current balance
+    // 📥 Fetch the current balance
     let mut balance = client
         .get_balance()
-        .instrument(span!(Level::DEBUG, "get_balance_start"))
+        .instrument(span!(Level::INFO, "get_balance_start"))
         .await?;
-    debug!(balance, "Balance fetched");
+    debug!("📥 Balance fetched: {} SYS", balance);
 
-    // Funding flow if balance is zero
+    // 💸 Funding flow if balance is zero
     if balance <= 0.0 {
-        info!("Balance empty, initiating funding flow");
+        info!("⚠️ Balance empty, let's top you up!");
         let address = match client
             .fetch_address_by_label("podalabel")
             .instrument(span!(Level::DEBUG, "fetch_address_by_label", label = "podalabel"))
             .await?
         {
             Some(addr) => {
-                info!(address = %addr, "Found existing funding address");
+                info!("📍 Found existing funding address: {}", addr);
                 addr
             }
             None => {
-                info!("No existing address found, creating new one");
+                info!("✨ No address yet—creating a fresh one…");
                 let addr = client
                     .get_new_address("podalabel")
                     .instrument(span!(Level::DEBUG, "get_new_address", label = "podalabel"))
                     .await?;
-                info!(address = %addr, "Created new funding address");
+                info!("📍 New funding address: {}", addr);
                 addr
             }
         };
 
-        info!(address = %address, "Please fund your wallet with SYS at this address");
+        info!("💌 Please send some SYS to: {}", address);
 
-        // Poll until funds arrive
+        // 🔄 Poll until funds arrive
         while balance <= 0.0 {
-            debug!("Sleeping for 10 seconds before next balance check");
+            debug!("⏳ Waiting 10 seconds before checking balance again…");
             sleep(Duration::from_secs(10)).await;
             balance = client.get_balance().await?;
-            info!(address = %address, balance, "Current balance at address");
+            info!("🔄 Checking… current balance: {} SYS", balance);
         }
-        info!("Funding detected, proceeding...");
+        info!("🎉 Funds detected! Continuing…");
     }
 
-    // Blob upload/retrieval flow
-    info!("Uploading blob data [1,2,3,4]");
+    // 📤 Blob upload/retrieval flow
+    let data_to_upload = [1, 2, 3, 4];
+    info!("📤 Uploading blob data: {:?}", data_to_upload);
     let blob_hash = client
-        .create_blob(&[1, 2, 3, 4])
-        .instrument(span!(Level::DEBUG, "create_blob", data = "[1,2,3,4]"))
+        .create_blob(&data_to_upload)
+        .instrument(span!(Level::DEBUG, "create_blob", data = ?data_to_upload))
         .await?;
-    info!(hash = %blob_hash, "Blob created successfully");
+    info!("✅ Blob uploaded! Got hash: {}", blob_hash);
 
-    info!(hash = %blob_hash, "Fetching blob data back");
+    info!("📥 Fetching blob back by hash…");
     let blob_data = client
         .get_blob(&blob_hash)
         .instrument(span!(Level::DEBUG, "get_blob", hash = %blob_hash))
         .await?;
-    info!(data = ?blob_data, "Blob data retrieved");
+    info!("🗒️ Blob data retrieved: {:?}", blob_data);
 
-    info!("Syscoin client flow complete");
+    // 🔗 Log the data availability (DA) link
+    let da_link = format!("{}{}", poda_url, blob_hash);
+    info!("🔗 Access your data here: {}", da_link);
+
+    info!("🏁 Syscoin client flow complete—have a great day!");
     Ok(())
 }
