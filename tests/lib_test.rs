@@ -16,6 +16,7 @@ mod tests {
             "password",
             "http://poda.example.com",
             timeout,
+            "test_wallet",
         );
         assert!(result.is_ok());
     }
@@ -37,7 +38,7 @@ mod tests {
 
         // Set up mock response
         let _m = mock_server
-            .mock("POST", "/")
+            .mock("POST", "/wallet/test_wallet")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(mock_response.to_string())
@@ -49,6 +50,7 @@ mod tests {
             "password",
             "http://poda.example.com",
             None,
+            "test_wallet",
         )
             .unwrap();
 
@@ -76,7 +78,7 @@ mod tests {
         });
 
         let _m = mock_server
-            .mock("POST", "/")
+            .mock("POST", "/wallet/test_wallet")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(mock_response.to_string())
@@ -88,6 +90,7 @@ mod tests {
             "password",
             "http://poda.example.com",
             None,
+            "test_wallet",
         )
             .unwrap();
 
@@ -119,7 +122,8 @@ mod tests {
             "user",                   // Username
             "password",               // Password
             &mock_server.url(),       // PODA cloud URL
-            None                      // Timeout
+            None,                     // Timeout
+            "test_wallet",
         ).unwrap();
 
         // Use get_blob with a non-existent RPC server to force fallback to cloud
@@ -165,6 +169,7 @@ mod tests {
             "password",
             "http://poda.example.com",
             None,
+            "test_wallet",
         )
             .unwrap();
 
@@ -202,6 +207,7 @@ mod tests {
             "password",
             "http://poda.example.com",
             None,
+            "test_wallet",
         )
             .unwrap();
 
@@ -228,6 +234,7 @@ mod tests {
             "password",
             "http://poda.example.com",
             None,
+            "test_wallet",
         )
             .unwrap();
         let result = client.create_blob(&[1, 2, 3, 4]).await;
@@ -278,7 +285,8 @@ mod tests {
             "user",
             "password",
             &mock_server.url(), // Same server for both
-            None
+            None,
+            "test_wallet",
         ).unwrap();
         
         // Add very detailed debug info
@@ -320,7 +328,8 @@ mod tests {
             "user",
             "password",
             "http://poda.example.com",
-            None
+            None,
+            "test_wallet",
         ).unwrap();
         
         let result = client.check_blob_finality(blob_id).await;
@@ -358,7 +367,8 @@ mod tests {
             "user",
             "password",
             "http://poda.example.com",
-            None
+            None,
+            "test_wallet",
         ).unwrap();
         
         let result = client.check_blob_finality(blob_id).await;
@@ -400,7 +410,8 @@ mod tests {
             "user",
             "password",
             "http://poda.example.com",
-            None
+            None,
+            "test_wallet",
         ).unwrap();
         
         let result = client.check_blob_finality(blob_id).await;
@@ -439,7 +450,8 @@ mod tests {
             "user",
             "password",
             "http://poda.example.com",
-            None
+            None,
+            "test_wallet",
         ).unwrap();
         
         let result = client.check_blob_finality(blob_id).await;

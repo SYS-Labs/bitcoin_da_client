@@ -198,6 +198,10 @@ impl RealRpcClient {
     }
 
 
+    /// Expose the configured wallet name
+    pub fn wallet_name(&self) -> &str {
+        &self.wallet_name
+    }
 }
 
 #[async_trait]
@@ -279,6 +283,28 @@ impl SyscoinClient {
         Ok(hash.to_string())
     }
 
+
+    /// Ensure there is a receive address for the provided label.
+    /// If none exists, a new address is created and returned.
+    pub async fn ensure_address_by_label(&self, address_label: &str) -> Result<String, SyscoinError> {
+        match self.fetch_address_by_label(address_label).await? {
+            Some(existing) => Ok(existing),
+            None => self.get_new_address(address_label).await,
+        }
+    }
+
+    /// Ensure the wallet is created/loaded and return a labeled funding address.
+    /// This is idempotent and safe to call on startup.
+    pub async fn ensure_wallet_and_address(&self, wallet_name: &str, address_label: &str) -> Result<String, SyscoinError> {
+        self.create_or_load_wallet(wallet_name).await?;
+        self.ensure_address_by_label(address_label).await
+    }
+
+    /// Ensure the internally-configured wallet is loaded and return a labeled address
+    pub async fn ensure_own_wallet_and_address(&self, address_label: &str) -> Result<String, SyscoinError> {
+        let wallet_name = self.rpc_client.wallet_name();
+        self.ensure_wallet_and_address(wallet_name, address_label).await
+    }
 
     /// Get wallet balance
     pub async fn get_balance(&self) -> Result<f64, SyscoinError> {

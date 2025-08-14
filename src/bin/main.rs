@@ -41,13 +41,18 @@ async fn main() -> Result<(), Error> {
     )?;
     info!("✅ SyscoinClient initialized successfully");
 
-    // 💼 Create or load the wallet
+    // 💼 Create or load the wallet and ensure a stable funding address
     info!("🆕 Loading or creating wallet “{}”", wallet);
     client
         .create_or_load_wallet(wallet)
         .instrument(span!(Level::DEBUG, "create_or_load_wallet", wallet = wallet))
         .await?;
-    info!("✅ Wallet ready!");
+    let funding_label = "da_funding";
+    let funding_address = client
+        .ensure_address_by_label(funding_label)
+        .instrument(span!(Level::DEBUG, "ensure_address_by_label", label = funding_label))
+        .await?;
+    info!("🏷️ Funding label '{}' is bound to address: {}", funding_label, funding_address);
 
     // 📥 Fetch the current balance
     let mut balance = client
