@@ -420,10 +420,8 @@ impl SyscoinClient {
             blob_id
         };
 
-        // Use named parameters but don't request actual data
-        let params = vec![json!({
-            "versionhash_or_txid": actual_blob_id,
-        })];
+        // Use positional parameter: (versionhash_or_txid: String)
+        let params = vec![json!(actual_blob_id)];
 
         let response = self.rpc_client.call("getnevmblobdata", &params).await?;
 

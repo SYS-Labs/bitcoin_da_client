@@ -397,9 +397,9 @@ mod tests {
         // Verify the request was made with the correct parameters
         mock_server
             .mock("POST", "/")
-            .match_body(mockito::Matcher::JsonString(format!(
-                r#"{{"jsonrpc":"2.0","id":1,"method":"getnevmblobdata","params":[{{"versionhash_or_txid":"deadbeef"}}]}}"#
-            )))
+            .match_body(mockito::Matcher::JsonString(
+                r#"{"jsonrpc":"2.0","id":1,"method":"getnevmblobdata","params":["deadbeef"]}"#.to_string()
+            ))
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(mock_response.to_string())
