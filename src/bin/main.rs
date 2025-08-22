@@ -105,6 +105,17 @@ async fn main() -> Result<(), Error> {
         .await?;
     info!("✅ Blob uploaded! Got hash: {}", blob_hash);
 
+    // ✅ Check finality (chainlock) once
+    let is_final = client
+        .check_blob_finality(&blob_hash)
+        .instrument(span!(Level::INFO, "check_blob_finality", hash = %blob_hash))
+        .await?;
+    if is_final {
+        info!("🔒 Blob is FINAL (chainlocked)");
+    } else {
+        info!("⌛ Blob not final yet (no chainlock)");
+    }
+
     info!("📥 Fetching blob back by hash…");
     let blob_data = client
         .get_blob(&blob_hash)
@@ -115,6 +126,7 @@ async fn main() -> Result<(), Error> {
     // 🔗 Log the data availability (DA) link
     let da_link = format!("{}{}", poda_url, blob_hash);
     info!("🔗 Access your data here: {}", da_link);
+
 
     info!("🏁 Syscoin client flow complete—have a great day!");
     Ok(())
