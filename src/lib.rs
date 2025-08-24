@@ -423,7 +423,23 @@ impl SyscoinClient {
         // Use positional parameter: (versionhash_or_txid: String)
         let params = vec![json!(actual_blob_id)];
 
-        let response = self.rpc_client.call("getnevmblobdata", &params).await?;
+        // If the node does not know the blob yet, it may return an HTTP 500 with
+        // a JSON-RPC error body like:
+        // {"result":null,"error":{"code":-32602,"message":"Could not find blob information for versionhash ..."},"id":1}
+        // Treat this as "not final yet" instead of a hard error so that the
+        // dispatcher keeps polling for finality.
+        let response = match self.rpc_client.call("getnevmblobdata", &params).await {
+            Ok(v) => v,
+            Err(e) => {
+                let msg = e.to_string();
+                if msg.contains("Could not find blob information for versionhash")
+                    || msg.contains("\"code\":-32602")
+                {
+                    return Ok(false);
+                }
+                return Err(e);
+            }
+        };
 
         // Extract finality status from response
         let is_final = response
