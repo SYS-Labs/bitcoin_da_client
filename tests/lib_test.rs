@@ -464,6 +464,8 @@ mod tests {
             Server::new()
         }).join().expect("Failed to create mock server");
 
+        // Low smart fee alone would yield ceil(100/1000 * 0.01) = 1 sat per blob-byte;
+        // mempool minimum is higher so we assert the client takes max(estimate, mempool, relay).
         mock_server
             .mock("POST", "/")
             .match_body(mockito::Matcher::Regex("estimatesmartfee".into()))
@@ -471,7 +473,7 @@ mod tests {
             .with_header("content-type", "application/json")
             .with_body(
                 json!({
-                    "result": { "feerate": 0.00001, "blocks": 6 },
+                    "result": { "feerate": 0.000001, "blocks": 6 },
                     "error": null,
                     "id": 1
                 })
@@ -486,7 +488,7 @@ mod tests {
             .with_header("content-type", "application/json")
             .with_body(
                 json!({
-                    "result": { "mempoolminfee": 0.00002, "minrelaytxfee": 0.000015 },
+                    "result": { "mempoolminfee": 0.002, "minrelaytxfee": 0.000015 },
                     "error": null,
                     "id": 1
                 })
@@ -504,7 +506,8 @@ mod tests {
         ).unwrap();
 
         let fee = client.get_blob_base_fee(6).await.unwrap();
-        assert_eq!(fee, 20);
+        // 0.002 SYS/kvb -> 200_000 sat/kvb -> ceil(200_000/1000 * 0.01) = 2
+        assert_eq!(fee, 2);
     }
 
 }
