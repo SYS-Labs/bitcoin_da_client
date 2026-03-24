@@ -1,8 +1,8 @@
 [package]
 name = "bitcoin_da_client"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2021"
-authors = ["SYS LABS abdul@syscoin.org"]
+authors = ["SYS LABS sidhujag@syscoin.org"]
 description = "Tools for interacting with BitcoinDA by SYS LABS"
 license = "MIT OR Apache-2.0"
 [lib]

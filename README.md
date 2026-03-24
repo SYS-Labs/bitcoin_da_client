@@ -17,7 +17,7 @@ Add `bitcoin_da_client` to your `Cargo.toml`:
 
 ```rust
 [dependencies]
-bitcoin_da_client = "0.1.1"
+bitcoin_da_client = "0.1.8"
 ```
 
 Ensure that you have the following dependencies in your project, as `syscoin_client` relies on them:

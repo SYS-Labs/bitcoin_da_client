@@ -458,5 +458,54 @@ mod tests {
         assert!(result.is_err());
     }
 
+    #[tokio::test]
+    async fn test_get_blob_base_fee_uses_network_minimum() {
+        let mut mock_server = std::thread::spawn(|| {
+            Server::new()
+        }).join().expect("Failed to create mock server");
+
+        mock_server
+            .mock("POST", "/")
+            .match_body(mockito::Matcher::Regex("estimatesmartfee".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                json!({
+                    "result": { "feerate": 0.00001, "blocks": 6 },
+                    "error": null,
+                    "id": 1
+                })
+                .to_string(),
+            )
+            .create();
+
+        mock_server
+            .mock("POST", "/")
+            .match_body(mockito::Matcher::Regex("getmempoolinfo".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                json!({
+                    "result": { "mempoolminfee": 0.00002, "minrelaytxfee": 0.000015 },
+                    "error": null,
+                    "id": 1
+                })
+                .to_string(),
+            )
+            .create();
+
+        let client = SyscoinClient::new(
+            &mock_server.url(),
+            "user",
+            "password",
+            "http://poda.example.com",
+            None,
+            "test_wallet",
+        ).unwrap();
+
+        let fee = client.get_blob_base_fee(6).await.unwrap();
+        assert_eq!(fee, 20);
+    }
+
 }
 

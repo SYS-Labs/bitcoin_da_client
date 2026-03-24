@@ -8,6 +8,9 @@ use tracing::{info, warn};
 
 // Default timeout in seconds if none is specified
 const DEFAULT_TIMEOUT_SECS: u64 = 30;
+const SATOSHIS_PER_SYS: f64 = 100_000_000.0;
+const VBYTES_PER_KVB: f64 = 1000.0;
+const NEVM_DATA_SCALE_FACTOR: f64 = 0.01;
 
 /// Maximum payload accepted by the Syscoin PoDA endpoint (2 MiB).
 pub const MAX_BLOB_SIZE: usize = 2 * 1024 * 1024;
@@ -242,6 +245,13 @@ pub struct SyscoinClient {
     poda_url: String,
 }
 
+fn parse_amount_value(value: &Value) -> Result<f64, SyscoinError> {
+    value
+        .as_f64()
+        .or_else(|| value.as_str().and_then(|v| v.parse::<f64>().ok()))
+        .ok_or_else(|| "Invalid amount format".into())
+}
+
 impl SyscoinClient {
     /// Create a new Syscoin client
     pub fn new(
@@ -309,6 +319,43 @@ impl SyscoinClient {
     /// Get wallet balance
     pub async fn get_balance(&self) -> Result<f64, SyscoinError> {
         self.rpc_client.get_balance(None, None).await
+    }
+
+    /// Return the effective Syscoin blob base fee per blob byte, after applying
+    /// the network minimum fee and the NEVM blob size discount factor.
+    pub async fn get_blob_base_fee(&self, conf_target: u16) -> Result<u128, SyscoinError> {
+        let estimate = self
+            .rpc_client
+            .call("estimatesmartfee", &[json!(conf_target), json!("economical")])
+            .await?;
+        let estimate_fee_per_kvb = estimate
+            .get("feerate")
+            .map(parse_amount_value)
+            .transpose()?
+            .unwrap_or(0.0);
+
+        let mempool_info = self.rpc_client.call("getmempoolinfo", &[]).await?;
+        let mempool_min_fee_per_kvb = mempool_info
+            .get("mempoolminfee")
+            .map(parse_amount_value)
+            .transpose()?
+            .unwrap_or(0.0);
+        let min_relay_fee_per_kvb = mempool_info
+            .get("minrelaytxfee")
+            .map(parse_amount_value)
+            .transpose()?
+            .unwrap_or(0.0);
+
+        let effective_fee_per_kvb = estimate_fee_per_kvb
+            .max(mempool_min_fee_per_kvb)
+            .max(min_relay_fee_per_kvb);
+        if effective_fee_per_kvb <= 0.0 {
+            return Err("Failed to determine Syscoin blob base fee".into());
+        }
+
+        let sat_per_kvb = effective_fee_per_kvb * SATOSHIS_PER_SYS;
+        let sat_per_blob_byte = (sat_per_kvb / VBYTES_PER_KVB * NEVM_DATA_SCALE_FACTOR).ceil();
+        Ok((sat_per_blob_byte as u128).max(1))
     }
 
     /// Fetch a blob; tries RPC first, then falls back to PoDA cloud

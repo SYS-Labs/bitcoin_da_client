@@ -72,7 +72,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-bitcoin_da_client = "0.1.1"
+bitcoin_da_client = "0.1.8"
 tokio             = { version = "1", features = ["full"] }
 reqwest           = "0.12"
 serde             = "1.0"
