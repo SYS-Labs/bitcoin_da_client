@@ -561,6 +561,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_check_blob_finality_by_confirmations_missing_height_is_not_final() {
+        let mut mock_server = std::thread::spawn(|| Server::new())
+            .join()
+            .expect("Failed to create mock server");
+
+        let blob_id = "feedbeef";
+
+        mock_server
+            .mock("POST", "/")
+            .match_body(mockito::Matcher::Regex("getnevmblobdata".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                json!({
+                    "result": {
+                        "versionhash": blob_id,
+                        "txid": "abc123"
+                    },
+                    "error": null,
+                    "id": 1
+                })
+                .to_string(),
+            )
+            .create();
+
+        let client = SyscoinClient::new(
+            &mock_server.url(),
+            "user",
+            "password",
+            "http://poda.example.com",
+            None,
+            "test_wallet",
+        )
+        .unwrap();
+
+        let result = client
+            .check_blob_finality_by_confirmations(blob_id, 5)
+            .await;
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        assert!(
+            !result.unwrap(),
+            "Expected missing height to be treated as not final"
+        );
+    }
+
+    #[tokio::test]
     async fn test_check_blob_finality_with_mode_confirmations_dispatches() {
         let mut mock_server = std::thread::spawn(|| Server::new())
             .join()

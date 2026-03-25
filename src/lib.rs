@@ -539,10 +539,11 @@ impl SyscoinClient {
             }
         };
 
-        let blob_height = response
-            .get("height")
-            .and_then(|v| v.as_u64())
-            .ok_or("Missing height in getnevmblobdata response")?;
+        let Some(blob_height) = response.get("height").and_then(|v| v.as_u64()) else {
+            // Unconfirmed blobs may not have a mined height yet; treat this as "not final"
+            // so callers keep polling instead of crashing.
+            return Ok(false);
+        };
 
         let current_height = self
             .rpc_client
