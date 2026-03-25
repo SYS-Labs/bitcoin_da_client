@@ -3,7 +3,7 @@ mod tests {
     use mockito::Server;
     use serde_json::json;
     use tokio;
-    use bitcoin_da_client::SyscoinClient;
+    use bitcoin_da_client::{BitcoinDaFinalityMode, SyscoinClient};
     use hex;
 
 
@@ -456,6 +456,163 @@ mod tests {
         
         let result = client.check_blob_finality(blob_id).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_check_blob_finality_by_confirmations_true() {
+        let mut mock_server = std::thread::spawn(|| Server::new())
+            .join()
+            .expect("Failed to create mock server");
+
+        let blob_id = "feedbeef";
+
+        mock_server
+            .mock("POST", "/")
+            .match_body(mockito::Matcher::Regex("getnevmblobdata".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                json!({
+                    "result": {
+                        "versionhash": blob_id,
+                        "height": 100
+                    },
+                    "error": null,
+                    "id": 1
+                })
+                .to_string(),
+            )
+            .create();
+
+        mock_server
+            .mock("POST", "/")
+            .match_body(mockito::Matcher::Regex("getblockcount".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(json!({"result": 104, "error": null, "id": 1}).to_string())
+            .create();
+
+        let client = SyscoinClient::new(
+            &mock_server.url(),
+            "user",
+            "password",
+            "http://poda.example.com",
+            None,
+            "test_wallet",
+        )
+        .unwrap();
+
+        let result = client
+            .check_blob_finality_by_confirmations(blob_id, 5)
+            .await;
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        assert!(result.unwrap(), "Expected blob to satisfy confirmation threshold");
+    }
+
+    #[tokio::test]
+    async fn test_check_blob_finality_by_confirmations_false() {
+        let mut mock_server = std::thread::spawn(|| Server::new())
+            .join()
+            .expect("Failed to create mock server");
+
+        let blob_id = "feedbeef";
+
+        mock_server
+            .mock("POST", "/")
+            .match_body(mockito::Matcher::Regex("getnevmblobdata".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                json!({
+                    "result": {
+                        "versionhash": blob_id,
+                        "height": 100
+                    },
+                    "error": null,
+                    "id": 1
+                })
+                .to_string(),
+            )
+            .create();
+
+        mock_server
+            .mock("POST", "/")
+            .match_body(mockito::Matcher::Regex("getblockcount".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(json!({"result": 103, "error": null, "id": 1}).to_string())
+            .create();
+
+        let client = SyscoinClient::new(
+            &mock_server.url(),
+            "user",
+            "password",
+            "http://poda.example.com",
+            None,
+            "test_wallet",
+        )
+        .unwrap();
+
+        let result = client
+            .check_blob_finality_by_confirmations(blob_id, 5)
+            .await;
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        assert!(!result.unwrap(), "Expected blob to be below confirmation threshold");
+    }
+
+    #[tokio::test]
+    async fn test_check_blob_finality_with_mode_confirmations_dispatches() {
+        let mut mock_server = std::thread::spawn(|| Server::new())
+            .join()
+            .expect("Failed to create mock server");
+
+        let blob_id = "feedbeef";
+
+        mock_server
+            .mock("POST", "/")
+            .match_body(mockito::Matcher::Regex("getnevmblobdata".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                json!({
+                    "result": {
+                        "versionhash": blob_id,
+                        "height": 100
+                    },
+                    "error": null,
+                    "id": 1
+                })
+                .to_string(),
+            )
+            .create();
+
+        mock_server
+            .mock("POST", "/")
+            .match_body(mockito::Matcher::Regex("getblockcount".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(json!({"result": 104, "error": null, "id": 1}).to_string())
+            .create();
+
+        let client = SyscoinClient::new(
+            &mock_server.url(),
+            "user",
+            "password",
+            "http://poda.example.com",
+            None,
+            "test_wallet",
+        )
+        .unwrap();
+
+        let result = client
+            .check_blob_finality_with_mode(
+                blob_id,
+                BitcoinDaFinalityMode::Confirmations,
+                5,
+            )
+            .await;
+        assert!(result.is_ok(), "Error: {:?}", result.err());
+        assert!(result.unwrap(), "Expected confirmation mode finality check to pass");
     }
 
     #[tokio::test]

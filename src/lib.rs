@@ -18,6 +18,12 @@ pub const MAX_BLOB_SIZE: usize = 2 * 1024 * 1024;
 /// Thread-safe error type
 pub type SyscoinError = Box<dyn Error + Send + Sync + 'static>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BitcoinDaFinalityMode {
+    Chainlock,
+    Confirmations,
+}
+
 /// Response structure for JSON-RPC calls
 #[derive(Deserialize, Debug)]
 struct JsonRpcResponse<T> {
@@ -495,6 +501,57 @@ impl SyscoinClient {
             .unwrap_or(false);
 
         Ok(is_final)
+    }
+
+    pub async fn check_blob_finality_with_mode(
+        &self,
+        blob_id: &str,
+        mode: BitcoinDaFinalityMode,
+        confirmations: u64,
+    ) -> Result<bool, SyscoinError> {
+        match mode {
+            BitcoinDaFinalityMode::Chainlock => self.check_blob_finality(blob_id).await,
+            BitcoinDaFinalityMode::Confirmations => {
+                self.check_blob_finality_by_confirmations(blob_id, confirmations).await
+            }
+        }
+    }
+
+    /// Check if a blob is final based on a required number of confirmations.
+    pub async fn check_blob_finality_by_confirmations(
+        &self,
+        blob_id: &str,
+        confirmations: u64,
+    ) -> Result<bool, SyscoinError> {
+        let actual_blob_id = blob_id.strip_prefix("0x").unwrap_or(blob_id);
+        let params = vec![json!(actual_blob_id)];
+
+        let response = match self.rpc_client.call("getnevmblobdata", &params).await {
+            Ok(v) => v,
+            Err(e) => {
+                let msg = e.to_string();
+                if msg.contains("Could not find blob information for versionhash")
+                    || msg.contains("\"code\":-32602")
+                {
+                    return Ok(false);
+                }
+                return Err(e);
+            }
+        };
+
+        let blob_height = response
+            .get("height")
+            .and_then(|v| v.as_u64())
+            .ok_or("Missing height in getnevmblobdata response")?;
+
+        let current_height = self
+            .rpc_client
+            .call("getblockcount", &[])
+            .await?
+            .as_u64()
+            .ok_or("getblockcount returned non-u64 result")?;
+
+        Ok(current_height.saturating_sub(blob_height) + 1 >= confirmations)
     }
 
     /// Create or load a wallet by name
