@@ -72,8 +72,15 @@ impl RealRpcClient {
     ) -> Result<Self, SyscoinError> {
         let timeout = timeout.unwrap_or_else(|| Duration::from_secs(DEFAULT_TIMEOUT_SECS));
 
+        // Bitcoin/Syscoin JSON-RPC over HTTP/1.1 often closes idle keep-alive connections on the
+        // server side long before reqwest's default pool idle timeout (90s). We poll finality with
+        // gaps (e.g. `bitcoin_da_finality_poll_interval`), then reuse a pooled socket that the server
+        // already closed → reqwest yields `error sending request for url (...)` with no JSON body.
+        // Drop idle sockets quickly so each poll tends to open a fresh connection.
         let http_client = ClientBuilder::new()
             .timeout(timeout)
+            .pool_idle_timeout(Some(Duration::from_secs(2)))
+            .tcp_keepalive(Some(Duration::from_secs(15)))
             .build()?;
 
         Ok(Self {
