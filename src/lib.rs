@@ -295,8 +295,10 @@ impl SyscoinClient {
         }
 
         let data_hex = hex::encode(data);
-        // pass hex string as the first positional param
-        let params = vec![ json!(data_hex) ];
+        // pass positional args: data hex, overwrite_existing, hash type.
+        // Keep overwrite_existing=false to make repeated calls idempotent for identical data.
+        // Force blake2s to keep blob IDs aligned with Syscoin / OS expectations.
+        let params = vec![json!(data_hex), json!(false), json!("blake2s")];
 
         let response = self.rpc_client.call_wallet("syscoincreatenevmblob", &params).await?;
         let hash = response
